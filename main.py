@@ -1,127 +1,164 @@
-
-import requests
-import re
 import time
-import json
-from bs4 import BeautifulSoup
-import urllib
-from random import getrandbits
+
+from bs4 import BeautifulSoup, SoupStrainer
+from user_agent import generate_user_agent
+from random import randint, choice
+from colorama import Fore, init
+from functools import partial
 from threading import Thread
-from Queue import Queue
-from colorama import Fore, Back, Style
-from colorama import init
-init(autoreset=True)
 import threading
-threadLock = threading.Lock()
-proxies = False
+import requests
+import urllib3
+import logging
+import string
+import names
+import queue
+import json
+import re
 
-requests.packages.urllib3.disable_warnings()
+init(autoreset=True)
+logging.basicConfig(filename='errors.log', level=logging.ERROR, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def load_proxies(filename):
-    proxies = []
-    with open(filename) as fh:
-        for line in fh:
-            line = line.strip()
-            data = line.split(":")
-            proxies.append(data)
-    return proxies
-if proxies:
-    proxies = load_proxies("")
-    print "Loaded: {} proxies".format(len(proxies))
-else:
-    print "Not using proxies!!"
-class Presto(object):
-    counter = 1
-    s = requests.Session()
-    url = "https://docs.google.com/forms/d/e/1FAIpQLSdhFkAfM1VGDvbp0f3ETi-DaNRTswB7IgIC9uoWbECCd7sI6g/viewform"
-    posturl = "https://docs.google.com/forms/d/e/1FAIpQLSdhFkAfM1VGDvbp0f3ETi-DaNRTswB7IgIC9uoWbECCd7sI6g/formResponse"
+# globals
+logger = logging.getLogger(__name__)
+lock = threading.Lock()
+colors = [vars(Fore)[color] for color in vars(Fore) if color in ['BLUE', 'CYAN', 'GREEN', 'MAGENTA', 'WHITE', 'YELLOW']]
+strainer = SoupStrainer('div', class_='freebirdFormviewerViewResponseConfirmationMessage')
+url = "https://docs.google.com/forms/d/e/1FAIpQLSdhFkAfM1VGDvbp0f3ETi-DaNRTswB7IgIC9uoWbECCd7sI6g/viewform"
+post_url = "https://docs.google.com/forms/d/e/1FAIpQLSdhFkAfM1VGDvbp0f3ETi-DaNRTswB7IgIC9uoWbECCd7sI6g/formResponse"
 
 
-    postheaders = {
-        "Upgrade-Insecure-Requests": "1",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.87 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-        "X-Client-Data": "CJG2yQEIorbJAQjEtskBCKmdygEI153KAQioo8oB",
-        "X-Chrome-Connected": "id=113292259032357480973,mode=0,enable_account_consistency=false",
-        "Referer": "https://docs.google.com/forms/d/e/1FAIpQLSdhFkAfM1VGDvbp0f3ETi-DaNRTswB7IgIC9uoWbECCd7sI6g/viewform?fbzx=-7523426717494581000",
-        "Accept-Encoding": "gzip, deflate, br1",
-        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8"
-        }
+def rand_chars(num=4):
+    return ''.join(choice(string.ascii_uppercase) for _ in range(num))
 
-    headers1 = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.91 Safari/537.36",
-        }
 
-    def loopThrough(self):
-        print "\n"
-        print "Made by https://twitter.com/thebotsmith - follow for free scripts every week!!"
-        print "\n"
-
-        time.sleep(5)
-        x = 100#TODO change amount of entries per thread
-        if proxies:
-            r = self.s.get(self.url,headers=self.headers1,verify=False,proxies=proxies)
+def handle_post(email, r, *args, **kwargs):
+    # parse request for success
+    if r.status_code == 200:
+        bs = BeautifulSoup(r.text, 'lxml', parse_only=strainer)
+        if bs.find('div').text == "Thank you for subscribing / Grazie per esserti iscritto":
+            with lock:
+                Presto.entry_success.add(email)
+                msg = ''.join([colors[(idx+len(Presto.entry_success)) % len(colors)] + char for idx, char in enumerate("success")])
+                print(f'{colors[len(Presto.entry_success) % len(colors)]}{email.split("@")[0]}\t{msg}'.expandtabs(tabsize=30))
         else:
-            r = self.s.get(self.url,headers=self.headers1,verify=False)
-        for i in range(x):
-            email = 'maxbanes101+{}@gmail.com'.format(getrandbits(40))   #TODO
-            try:
-                data = {
-                    "emailAddress":email,
-                    "entry.1884265043":"your name",
-                    "entry.1938400468":"your second name",
-                    "entry.1450673532_year":"1990",
-                    "entry.1450673532_month":"9",
-                    "entry.1450673532_day":"20",
-                    "entry.71493440":"1 WEST road",
-                    "entry.1981412943":"gl80 bms",
-                    "entry.950259558":"london",
-                    "entry.1622497152":"United Kingdom",
-                    "entry.1850033056":"078874747400",
-                    "entry.769447175":"myinsta",#TODO instagram username (must be publioc)
-                    "entry.256744251_sentinel":"",
-                    "entry.256744251":"Autorizzo il trattamento dei miei dati personali, ai sensi del D.lgs. 196 del 30 giugno 2003",
-                    "entry.715796591":"10", #TODO size in us format
-                    "fvv":"1",
-                    "draftResponse":'[null,null,"-7523426717494581264"]',
-                    "pageHistory":"0",
-                    "fbzx":"-7523426717494581264"
-                    }
-                if proxies:
-                    r = self.s.post(self.posturl,headers=self.postheaders,verify=False,data=data,proxies=proxies)
-                else:
-                    r = self.s.post(self.posturl,headers=self.postheaders,verify=False,data=data)
+            logger.error(f'{self.name} - error parsing raffle post response')
+    else:
+        logger.error(f'{self.name} - error sending post request ({r.status_code})\n')
 
-                if "Thank you for subscribing" in r.text:
-                    print "entered sccessfully"
-                    self.counter += 1
-                    self.s.cookies.clear()
-                    with open ("enteredaccounts.txt","a") as f:
-                        f.write(email + "\n")
-                else:
-                    print "failed to enter."
-            except Exception as e:
-                print(e)
+
+class Presto(Thread):
+    entry_success = set()
+    proxy_queue = queue.Queue()
+    sessions = {}
+
+    def __init__(self):
+        super().__init__()
+        self.sess = None if config['use_proxies'] else requests.session()
+        self.curr_proxy = None
+
     def run(self):
-            self.loopThrough()
-            print(Fore.GREEN + "** {} FINISHED WORK CLOSING THREAD **".format(threading.current_thread().name))
+        for i in range(config['max_entries_per_thread']):
+            if config['use_proxies']:
+                self.curr_proxy = Presto.proxy_queue.get()
+                self.sess = Presto.sessions[self.curr_proxy]
+            self.sess.headers.update({
+                'User-Agent': generate_user_agent(device_type='desktop')
+            })
+            try:
+                # get form
+                resp = self.sess.get(url)
+                if resp.status_code != 200:
+                    logging.error(f'{self.name} - error retrieving raffle page ({resp.status_code})')
+                    continue
+                # find unique id
+                resid = re.search('name="fbzx" value="(.*?)">', resp.text).group(1)
+                # create randomized data
+                first = names.get_first_name()
+                last = names.get_last_name()
+                email = f'{first}.{last}@{config["catchall"]}'
 
-bots = []
+                data = {
+                    "emailAddress": email,
+                    "entry.1884265043": first,
+                    "entry.1938400468": last,
+                    "entry.1450673532_year": str(randint(1975, 1995)),
+                    "entry.1450673532_month": '{:02}'.format(randint(1, 12)),
+                    "entry.1450673532_day": '{:02}'.format(randint(1, 27)),
+                    "entry.71493440": profile['address'] % rand_chars() + choice(profile.get('endings')) if profile.get('endings') else '',
+                    "entry.1981412943": profile['zip'],
+                    "entry.950259558": profile['city'],
+                    "entry.1622497152": choice(
+                        ['United States', 'US', 'USA', 'United States of America', 'U.S.A', 'U.S']),
+                    "entry.1850033056": "",
+                    "entry.769447175": profile['ig_username'],
+                    "entry.256744251_sentinel": "",
+                    "entry.256744251": "Autorizzo il trattamento dei miei dati personali, ai sensi del D.lgs. 196 del 30 giugno 2003",
+                    "entry.715796591": str(randint(4, 12)),
+                    "fvv": "1",
+                    "draftResponse": f'[null,null,"{resid}"]',
+                    "pageHistory": "0",
+                    "fbzx": f'{resid}'
+                }
+                headers = {
+                    "Upgrade-Insecure-Requests": "1",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                    "X-Client-Data": "CJG2yQEIorbJAQjEtskBCKmdygEI153KAQioo8oB",
+                    "X-Chrome-Connected": "id=113292259032357480973,mode=0,enable_account_consistency=false",
+                    "Referer": f'{url}?fbzx={resid}',
+                    "Accept-Encoding": "gzip, deflate, br1",
+                    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8"
+                }
+                # submit post request
+                self.sess.post(post_url, headers=headers, data=data, hooks={'response': partial(handle_post, email)})
+            except Exception as e:
+                logging.error(f'{self.name} - exception caught:\n{e}')
+                time.sleep(config['exception_timeout'])
+            finally:
+                self.sess.cookies.clear()
+                if self.curr_proxy:
+                    Presto.proxy_queue.put_nowait(self.curr_proxy)
+                    self.curr_proxy = None
 
-for i in range(25):#TODO amount of threads
-    bot=Presto()
-    bots.append(bot)
 
-threads = []
-count = 1
-for bot in bots:
-    print(Fore.YELLOW +" ** bot {} started **".format(count))
-    time.sleep(1)
-    t = Thread(target=bot.run)
-    threads.append(t)
-    count += 1
-    t.start()
+if __name__ == "__main__":
+    with open('config.json', 'r') as file:
+        config = json.load(file)
 
-for t in threads:
-    t.join()
+    profile = config['profiles']['jonathan']
+
+    if config['use_proxies']:
+        with open('proxies.txt', 'r+') as file:
+            for line in file:
+                proxy_str = line.strip()
+                new_sess = requests.session()
+                new_sess.verify = False
+                new_sess.proxies.update(https='https://'+proxy_str)
+                Presto.sessions[proxy_str] = new_sess
+                for i in range(config['max_connections_per_proxy']):
+                    Presto.proxy_queue.put_nowait(proxy_str)
+
+    print(Fore.YELLOW + f' ** Starting {config["num_threads"]} threads **')
+    print(Fore.YELLOW + f' ** Attempting {config["num_threads"] * config["max_entries_per_thread"]} entries')
+
+    try:
+        threads = []
+        for i in range(config['num_threads']):
+            thread = Presto()
+            thread.start()
+            threads.append(thread)
+
+        for t in threads:
+            t.join()
+    except KeyboardInterrupt:
+        print('cancelling')
+    finally:
+        [value.close() for key, value in Presto.sessions.items()]
+        with open(f'enteredaccounts_{profile["ig_username"]}.txt', 'a+') as file:
+            for item in Presto.entry_success:
+                file.write(item + '\n')
+
+    print(Fore.CYAN + f'\n ** {threading.current_thread().name} FINISHED **')
+    print(Fore.GREEN + f'\n ** {len(Presto.entry_success)} SUCCESSFUL RAFFLE ENTRIES **')

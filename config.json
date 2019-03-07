@@ -1,0 +1,18 @@
+{
+   "use_proxies": true,
+   "catchall": "easymail.press",
+   "num_threads": 25,
+   "max_entries_per_thread": 250,
+   "max_connections_per_proxy": 2,
+   "exception_timeout": 2.5,
+
+   "profiles": {
+     "profile_name": {
+       "ig_username": "some_username",
+       "address": "some address",
+       "endings": ["Lane", "Ln", "ln", "lane", "Ln.", "ln.", "LN"],
+       "zip": "some zip code",
+       "city": "some city"
+     }
+   }
+}
